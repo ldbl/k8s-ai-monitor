@@ -1,0 +1,32 @@
+[project]
+name = "k8s-ai-monitor"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 160
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E402",   # module-level import not at top — needed for urllib3.disable_warnings before imports
+    "E731",   # lambda assignment — used for deferred context_fn closures, clearer than nested def
+    "E741",   # ambiguous variable name 'l' — used in list comprehensions, clear from context
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/engine/llm.py" = ["E501"]  # LLM prompt strings are long by nature
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+# K8s API returns Any extensively; enable stricter checks incrementally.
+disable_error_code = [
+    "union-attr",      # K8s objects have Optional fields everywhere
+    "var-annotated",   # re-assignments from K8s API dict access
+    "no-any-return",   # K8s/dict .get() returns Any
+    "assignment",      # K8s API type mismatches (Any vs concrete)
+    "misc",            # lambda type inference
+]

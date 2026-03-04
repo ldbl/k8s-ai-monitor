@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "k8s-monitor": {
+      "command": "python3",
+      "args": ["-m", "src.mcp_server"]
+    }
+  }
+}
