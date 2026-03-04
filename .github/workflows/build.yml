@@ -69,12 +69,11 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-      - name: Run Trivy vulnerability scanner (SARIF)
+      - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.full_tag }}
-          format: sarif
-          output: trivy-results.sarif
+          format: table
           severity: CRITICAL,HIGH
           vuln-type: os,library
           ignore-unfixed: true
