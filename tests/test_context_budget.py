@@ -158,9 +158,9 @@ class TestBuildAlertPayload(unittest.TestCase):
 
     def test_valid_json_output(self):
         data = self._make_data()
-        json_str, _, _ = build_alert_payload(data, "production/Pod/my-app", "senteca", 24000)
+        json_str, _, _ = build_alert_payload(data, "production/Pod/my-app", "test-cluster", 24000)
         parsed = json.loads(json_str)
-        self.assertEqual(parsed["cluster"], "senteca")
+        self.assertEqual(parsed["cluster"], "test-cluster")
         self.assertEqual(parsed["resource"], "production/Pod/my-app")
         self.assertIn("pod", parsed)
 

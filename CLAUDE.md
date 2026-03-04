@@ -64,7 +64,7 @@ src/
 │   ├── certificate.py        #   cert-manager certificate expiry
 │   ├── endpoint.py           #   HTTP endpoint health checks
 │   ├── backup.py             #   CNPG, CronJob, Percona backup checks
-│   ├── critical_endpoint.py  #   Critical endpoint chain probing
+│   ├── critical_endpoint.py  #   Traefik IngressRoute chain probing
 │   ├── storage_verify.py     #   S3/GCS backup storage verification
 │   └── _probe.py             #   HTTP probe helpers
 ├── collectors/                # Context collection for LLM
@@ -221,14 +221,14 @@ Auth: `X-Internal-Token` header matching `INTERNAL_TOKEN` env var.
 | `CERT_SCAN_INTERVAL_SECONDS` | `3600` | Certificate scanner interval |
 | `ENDPOINT_SCAN_INTERVAL_SECONDS` | `300` | Endpoint scanner interval |
 | `ENDPOINT_SCAN_TIMEOUT` | `10` | HTTP probe timeout |
-| `ENDPOINT_INGRESS_SERVICE` | _(empty)_ | Ingress service for external probes |
-| `ENDPOINT_REDIS_SERVICE` | _(empty)_ | Redis fallback if auto-discovery from storefront env vars fails (e.g. `redis-master.production.svc.cluster.local:6379`) |
+| `ENDPOINT_INGRESS_SERVICE` | _(empty)_ | Traefik LB service for external probes (e.g. `traefik.traefik.svc.cluster.local`) |
+| `ENDPOINT_REDIS_SERVICE` | _(empty)_ | Fallback Redis address (e.g. `redis-master.production.svc.cluster.local:6379`) |
 | `SCANNER_BACKUP_ENABLED` | `true` | Enable backup scanner |
 | `SCANNER_CRITICAL_ENDPOINT_ENABLED` | `false` | Enable critical endpoint scanner |
 | `BACKUP_SCAN_INTERVAL_SECONDS` | `3600` | Backup scanner interval |
 | `CRITICAL_ENDPOINT_INTERVAL_SECONDS` | `60` | Critical endpoint scanner interval |
-| `CRITICAL_ENDPOINT_CHAIN_DEPTH` | `3` | Depth of chain probing |
-| `CRITICAL_ENDPOINT_EXCLUDE_NAMES` | _(empty)_ | Comma-separated storefront CR names to skip |
+| `CRITICAL_ENDPOINT_EXCLUDE_NAMES` | _(empty)_ | Comma-separated IngressRoute names to skip |
+| `CRITICAL_ENDPOINT_INGRESS_NAMESPACES` | `traefik,kube-system` | Namespaces to search for Traefik pods |
 
 ### Backup & Storage
 | Variable | Default | Description |
@@ -267,7 +267,7 @@ Auth: `X-Internal-Token` header matching `INTERNAL_TOKEN` env var.
 | Variable | Default | Description |
 |---|---|---|
 | `CENTRAL_AGGREGATE` | `false` | Enable push to central ClickHouse |
-| `CENTRAL_CH_URL` | _(empty)_ | ClickHouse HTTP URL (e.g. `https://ch.devops.senteca.com`) |
+| `CENTRAL_CH_URL` | _(empty)_ | ClickHouse HTTP URL |
 | `CENTRAL_CH_USER` | `monitor` | ClickHouse user |
 | `CENTRAL_CH_PASSWORD` | _(empty)_ | ClickHouse password (from Vault) |
 | `CENTRAL_CH_DATABASE` | `monitor` | ClickHouse database name |
@@ -361,8 +361,7 @@ python -m src.cli audit --ns production --pod storefront
 
 ## Deployment
 
-Deployed via FluxCD from `flux_capacitor/modules/k8s-ai-monitor/deployment.yaml`.
-Image: `gcr.io/team-operations/k8s-ai-monitor:latest`.
+Deployed via FluxCD. Image: `ghcr.io/ldbl/k8s-ai-monitor:latest`.
 
 ## MCP Server
 

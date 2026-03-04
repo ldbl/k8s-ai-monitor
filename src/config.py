@@ -95,9 +95,9 @@ INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "")
 ENDPOINT_SCAN_ENABLED = os.environ.get("ENDPOINT_SCAN_ENABLED", "false").lower() == "true"
 ENDPOINT_SCAN_INTERVAL_SECONDS = int(os.environ.get("ENDPOINT_SCAN_INTERVAL_SECONDS", "300"))  # 5 min
 ENDPOINT_SCAN_TIMEOUT = int(os.environ.get("ENDPOINT_SCAN_TIMEOUT", "10"))  # seconds
-ENDPOINT_INGRESS_SERVICE = os.environ.get("ENDPOINT_INGRESS_SERVICE", "")  # e.g. "nginx-ingress-nginx-controller.senteca-system.svc.cluster.local"
+ENDPOINT_INGRESS_SERVICE = os.environ.get("ENDPOINT_INGRESS_SERVICE", "")  # e.g. "traefik.traefik.svc.cluster.local"
 ENDPOINT_BATCH_THRESHOLD = int(os.environ.get("ENDPOINT_BATCH_THRESHOLD", "3"))  # min endpoints to trigger batch mode
-ENDPOINT_REDIS_SERVICE = os.environ.get("ENDPOINT_REDIS_SERVICE", "")  # fallback if auto-discovery fails; e.g. "redis-master.production.svc.cluster.local:6379"
+ENDPOINT_REDIS_SERVICE = os.environ.get("ENDPOINT_REDIS_SERVICE", "")  # fallback Redis address; e.g. "redis-master.production.svc.cluster.local:6379"
 
 # Backup scanner
 SCANNER_BACKUP_ENABLED = os.environ.get("SCANNER_BACKUP_ENABLED", "true").lower() == "true"
@@ -131,6 +131,7 @@ CRITICAL_ENDPOINT_INTERVAL_SECONDS = int(os.environ.get("CRITICAL_ENDPOINT_INTER
 CRITICAL_ENDPOINT_CHAIN_DEPTH = int(os.environ.get("CRITICAL_ENDPOINT_CHAIN_DEPTH", "3"))
 _raw_ce_exclude = os.environ.get("CRITICAL_ENDPOINT_EXCLUDE_NAMES", "")
 CRITICAL_ENDPOINT_EXCLUDE_NAMES: set[str] = {n.strip() for n in _raw_ce_exclude.split(",") if n.strip()}
+CRITICAL_ENDPOINT_INGRESS_NAMESPACES = os.environ.get("CRITICAL_ENDPOINT_INGRESS_NAMESPACES", "traefik,kube-system")
 
 # Auto-maintenance detection (GKE node upgrades, etc.)
 AUTO_MAINTENANCE_ENABLED = os.environ.get("AUTO_MAINTENANCE_ENABLED", "false").lower() == "true"

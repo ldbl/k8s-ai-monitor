@@ -200,7 +200,7 @@ def _discover_lb_ip(ingress_svc_fqdn: str) -> str:
     """Parse service name/namespace from FQDN, read k8s Service, extract LB IP."""
     from kubernetes import client as k8s
 
-    # Parse FQDN: nginx-ingress-nginx-controller.senteca-system.svc.cluster.local
+    # Parse FQDN: traefik.traefik.svc.cluster.local
     parts = ingress_svc_fqdn.split(".")
     if len(parts) < 2:
         logger.debug("Cannot parse service FQDN: %s", ingress_svc_fqdn)

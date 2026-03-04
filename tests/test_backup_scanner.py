@@ -348,7 +348,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_DOWNLOAD_VERIFY = False
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "postgres-dump", "production", "core-service",
+                client, "test-backups", "postgres-dump", "production", "core-service",
                 self.today, self.yesterday,
             )
 
@@ -371,7 +371,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_DOWNLOAD_VERIFY = False
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "postgres-dump", "production", "core-service",
+                client, "test-backups", "postgres-dump", "production", "core-service",
                 self.today, self.yesterday,
             )
 
@@ -387,7 +387,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_DOWNLOAD_VERIFY = False
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "postgres-dump", "production", "core-service",
+                client, "test-backups", "postgres-dump", "production", "core-service",
                 self.today, self.yesterday,
             )
 
@@ -410,7 +410,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_DOWNLOAD_VERIFY = False
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "postgres-dump", "production", "core-service",
+                client, "test-backups", "postgres-dump", "production", "core-service",
                 self.today, self.yesterday,
             )
 
@@ -434,7 +434,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_DOWNLOAD_VERIFY = False
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "mongodb-dump", "production", "import-service",
+                client, "test-backups", "mongodb-dump", "production", "import-service",
                 self.today, self.yesterday,
             )
 
@@ -463,7 +463,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_VERIFY_BYTES = 1048576
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "mongodb-dump", "production", "cms-service",
+                client, "test-backups", "mongodb-dump", "production", "cms-service",
                 self.today, self.yesterday,
             )
 
@@ -488,7 +488,7 @@ class TestS3ServiceVerification(unittest.TestCase):
             cfg.BACKUP_STORAGE_VERIFY_BYTES = 1048576
             cfg.BACKUP_SIZE_DROP_THRESHOLD = 0.5
             results = self.scanner._verify_s3_service(
-                client, "senteca-backups", "mongodb-dump", "production", "cms-service",
+                client, "test-backups", "mongodb-dump", "production", "cms-service",
                 self.today, self.yesterday,
             )
 
@@ -517,7 +517,7 @@ class TestS3BackupDiscovery(unittest.TestCase):
         mock_mongo.return_value = ["cms-service"]
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
         client.list_objects.return_value = [_make_object(size=50000, age_hours=3)]
 
         results = self.scanner._verify_s3_backups(client)
@@ -543,7 +543,7 @@ class TestS3BackupDiscovery(unittest.TestCase):
         mock_mongo.return_value = []
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         results = self.scanner._verify_s3_backups(client)
         self.assertEqual(results, [])
@@ -556,7 +556,7 @@ class TestS3BackupDiscovery(unittest.TestCase):
         mock_find_ns.return_value = []
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         results = self.scanner._verify_s3_backups(client)
         self.assertEqual(results, [])
@@ -577,7 +577,7 @@ class TestS3BackupDiscovery(unittest.TestCase):
         mock_mongo.return_value = []
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         # core-service has file, dead-service has nothing
         def mock_list_objects(bucket, prefix, max_keys=10):
@@ -885,7 +885,7 @@ class TestCrossCheckCronJobS3(unittest.TestCase):
         api.list_namespaced_cron_job.return_value = MagicMock(items=[cj])
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
         client.list_objects.return_value = []  # No S3 file
 
         results = self.scanner._cross_check_cronjob_s3(client)
@@ -904,7 +904,7 @@ class TestCrossCheckCronJobS3(unittest.TestCase):
         api.list_namespaced_cron_job.return_value = MagicMock(items=[cj])
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
         client.list_objects.return_value = [_make_object(size=50000)]
 
         results = self.scanner._cross_check_cronjob_s3(client)
@@ -922,7 +922,7 @@ class TestCrossCheckCronJobS3(unittest.TestCase):
         api.list_namespaced_cron_job.return_value = MagicMock(items=[cj])
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         results = self.scanner._cross_check_cronjob_s3(client)
         self.assertEqual(len(results), 0)
@@ -939,7 +939,7 @@ class TestCrossCheckCronJobS3(unittest.TestCase):
         api.list_namespaced_cron_job.return_value = MagicMock(items=[cj])
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         results = self.scanner._cross_check_cronjob_s3(client)
         self.assertEqual(len(results), 0)
@@ -957,7 +957,7 @@ class TestCrossCheckCronJobS3(unittest.TestCase):
         api.list_namespaced_cron_job.return_value = MagicMock(items=[cj])
 
         client = MagicMock()
-        client.bucket = "senteca-backups"
+        client.bucket = "test-backups"
 
         results = self.scanner._cross_check_cronjob_s3(client)
         self.assertEqual(len(results), 0)
