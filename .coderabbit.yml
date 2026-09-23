@@ -1,0 +1,138 @@
+language: en-US
+early_access: false
+reviews:
+  profile: chill
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+  path_instructions:
+    - path: "**"
+      instructions: |
+        - CONTEXT: Python Kubernetes monitoring operator (Kopf-based) that uses LLMs to analyze cluster issues
+        - Architecture: Detection (scanners, K8s events, Flux watches) → Pipeline (dedup, context, LLM) → Alert (Slack)
+        - Be strict on: security (API keys, token handling, sanitization), correctness, error handling, async safety
+        - Be fair on: established patterns, Kubernetes API usage conventions
+        - Keep reviews concise and actionable - focus on high-impact issues only
+        - "Errors should never pass silently" - bare except clauses that swallow errors are a real bug pattern here
+        - Watch for: silent exception swallowing, race conditions in async scanner loops, unbounded context sizes
+    - path: "src/scanners/*.py"
+      instructions: |
+        - CONTEXT: Periodic scanners implementing the Scanner protocol (scan() -> list[ScanResult])
+        - Each scanner runs on its own async loop with configurable interval
+        - Check: proper K8s API error handling (404 = CRD not installed, not a bug), namespace filtering via EXCLUDE_NAMESPACES
+        - Check: ScanResult state_key uniqueness (used for dedup), correct severity levels
+        - Check: auto_resolve results are emitted for healthy state (clears previous alerts)
+        - Backup scanner has complex multi-source logic (CNPG, CronJob, Percona, S3) - verify each path independently
+        - Storage verification runs once daily - verify scheduling guard logic prevents missed or double runs
+    - path: "src/engine/*.py"
+      instructions: |
+        - CONTEXT: Core processing engine - LLM calls, pipeline orchestration, deduplication, Slack formatting
+        - pipeline.py is the shared entry point for all detection sources - changes here affect everything
+        - llm.py handles rate limiting, cost tracking, and response parsing - verify rate limit correctness
+        - notifier.py builds Slack Block Kit messages - verify block structure validity
+        - sanitizer.py redacts secrets - verify regex patterns catch real credential formats
+        - fingerprint.py generates SHA256 state keys - verify determinism and collision resistance
+        - escalation.py manages exponential backoff (2^count, capped 12h) - verify math correctness
+    - path: "src/engine/store/*.py"
+      instructions: |
+        - CONTEXT: SQLite-backed state store for incidents, occurrences, LLM calls, reports, suppressions
+        - Critical for deduplication and escalation - data integrity matters
+        - Check: SQL injection safety (use parameterized queries only)
+        - Check: proper datetime handling (always UTC, timezone-aware)
+        - Check: transaction safety for multi-table operations
+    - path: "src/handlers/*.py"
+      instructions: |
+        - CONTEXT: Kopf event handlers - startup, K8s Warning events, Flux stall detection
+        - startup.py initializes HTTP server, scanner loops, and daily scheduler
+        - events.py filters by IMPORTANT_EVENT_REASONS and namespace - verify filter correctness
+        - flux.py watches Kustomization/HelmRelease for Stalled condition
+        - Check: proper async patterns, no blocking calls in event handlers
+    - path: "src/collectors/*.py"
+      instructions: |
+        - CONTEXT: Gather diagnostic context for LLM analysis - pod logs, events, metrics, owner chain
+        - Context is truncated to MAX_CONTEXT_BYTES before LLM call - verify truncation preserves useful data
+        - prometheus.py queries Prometheus API - verify PromQL correctness
+        - Check: proper error handling when Prometheus/Metrics API is unavailable
+    - path: "src/diagnostics/*.py"
+      instructions: |
+        - CONTEXT: Issue-specific diagnostic plugins (OOM, CrashLoop, ImagePull, scheduling, etc.)
+        - Each plugin matches an issue_type from PROBLEM_ALIASES
+        - Check: diagnostic data collection doesn't make excessive K8s API calls
+        - Check: plugins handle missing/partial data gracefully (pod may be gone by analysis time)
+    - path: "src/config.py"
+      instructions: |
+        - CONTEXT: All configuration via environment variables with sensible defaults
+        - Every new scanner/feature needs its enable flag and interval here
+        - Check: default values are safe for production (scanners enabled by default should be non-destructive)
+        - Check: type conversions have proper error handling (int(), float())
+    - path: "src/cli.py"
+      instructions: |
+        - CONTEXT: Management CLI for kubectl exec into the container
+        - Read-only commands need no auth, write commands use INTERNAL_TOKEN
+        - Check: CLI output is human-readable with proper formatting
+        - Check: error cases produce helpful messages (DB not found, no incidents, etc.)
+    - path: "tests/*.py"
+      instructions: |
+        - CONTEXT: pytest tests for core logic (LLM parsing, sanitization, context budget, store)
+        - Tests should not require K8s cluster access or real LLM API keys
+        - Check: tests cover edge cases (empty input, malformed responses, unicode)
+        - Check: no flaky patterns (time-dependent, order-dependent)
+    - path: "Dockerfile"
+      instructions: |
+        - CONTEXT: Python 3.12-slim based image, runs kopf operator
+        - Check: no unnecessary packages, proper layer caching (requirements.txt before src/)
+        - Check: no secrets or credentials baked into the image
+        - Check: PYTHONPATH is set correctly for the src/ module layout
+    - path: "**/CLAUDE.md"
+      instructions: |
+        - This file contains development guidelines and architecture documentation
+        - Learn from the content and apply the principles when reviewing other files
+        - Reference these guidelines in code review suggestions when applicable
+  path_filters:
+    - "**/*.py"
+    - "Dockerfile"
+    - "requirements.txt"
+    - "**/CLAUDE.md"
+    - "**/*.yml"
+    - "**/*.yaml"
+    - "!**/__pycache__/**"
+    - "!**/*.pyc"
+    - "!**/*.log"
+    - "!**/*.db"
+  tools:
+    # Security tools
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+
+    # Python tools
+    ruff:
+      enabled: true
+
+    # Container tools
+    hadolint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CLAUDE.md"
+  learnings:
+    scope: "local"
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"
+
+chat:
+  auto_reply: false
+tone_instructions: "Be assertive on security, correctness, error handling, and async safety. Focus on real bugs over style. Watch for silent exception swallowing — it's the #1 bug pattern in this codebase. Keep feedback concise and actionable."
