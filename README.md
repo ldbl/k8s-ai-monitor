@@ -242,3 +242,4 @@ src/
 ├── collectors/         # Context collection for LLM (pod, node, metrics, daily, flux, prometheus)
 └── diagnostics/        # Issue-specific diagnostic plugins (OOM, crash, image pull, scheduling, etc.)
 ```
+
