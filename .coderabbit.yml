@@ -22,7 +22,7 @@ reviews:
       instructions: |
         Kopf operator: detection (scanners, K8s Warning events, Flux watches) -> src/engine/pipeline.py -> LLM -> Slack.
         - Errors must never pass silently: an `except` that only does pass/continue/return-default without logging is a bug, unless it is a narrow parse error (ValueError, TypeError, json.JSONDecodeError) with a comment.
-        - K8s ApiException: 404 = CRD not installed (debug log); anything else (403 included) = logger.warning.
+        - K8s ApiException 404: on custom-resource discovery/list calls it means the CRD is not installed (debug log); on a named object (pod, event, owner) it means the object is gone - handle it as such, do not report a missing CRD. Any other status (403 included) = logger.warning.
         - No blocking I/O in `async def` Kopf handlers; use loop.run_in_executor like src/handlers/startup.py.
         - Timestamps are epoch floats from time.time(); any datetime must be timezone-aware UTC.
         - A new Kubernetes API resource, API group or verb needs a matching ClusterRole change in safeops-course/sre (flux/infrastructure/observability/k8s-ai-monitor/clusterrole.yaml); the PR must say so.
@@ -30,7 +30,7 @@ reviews:
       instructions: |
         - Scanners are auto-discovered (pkgutil in src/scanners/__init__.py); a class counts if it satisfies the Scanner protocol in _base.py (name, enabled, interval_seconds, startup_delay, scan(), collect_daily_data()).
         - `enabled` must come from a config.py env var; new scanners that probe the network or read secrets default to "false". reconcile.py is always on by design.
-        - state_key must be deterministic and unique: `{Type}:{source}:{namespace}/{resource}`. Healthy state must emit ScanResult(auto_resolve=True).
+        - state_key must be deterministic and unique. Do not change the format of an existing scanner's key (dedup and auto-resolve of open incidents depend on it); new scanners follow the pattern of the closest existing one (e.g. `Certificate:{ns}/{name}`). Healthy state must emit ScanResult(auto_resolve=True).
         - Respect config.EXCLUDE_NAMESPACES / config.get_namespaces().
         - backup.py covers CNPG, backup CronJobs, Percona and S3/GCS verification; the once-per-day storage check guard is backup.py _last_storage_check_date (storage_verify.py holds only the S3/GCS clients).
         - HTTP probe bodies and log lines must go through sanitizer.redact_response_body before entering alert context.
