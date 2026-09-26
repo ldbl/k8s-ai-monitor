@@ -1,138 +1,109 @@
-language: en-US
-early_access: false
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Repo-specific rules. Organization defaults (language, tone, workflows, Dockerfile, shell,
+# *.example, CLAUDE/AGENT docs, pre-merge checks off, knowledge base scopes) come from
+# safeops-course/coderabbit/.coderabbit.yaml through `inheritance: true`.
+# CodeRabbit config for safeops-course/k8s-ai-monitor (Python Kopf operator; LLM analysis -> Slack).
+# Deployed by Flux from safeops-course/sre: flux/infrastructure/observability/k8s-ai-monitor/**
+# Only non-default values are set, except where an explicit value documents intent.
+tone_instructions: >-
+  Be direct. Prioritise secret/prompt data leaking to the LLM or Slack, silent exception swallowing, async blocking, and wrong alert/dedup logic. Skip style nits; ruff covers lint. Every finding needs a concrete fix.
 reviews:
   profile: chill
   request_changes_workflow: true
-  high_level_summary: true
-  poem: false
-  review_status: true
   auto_review:
     enabled: true
     drafts: false
-    auto_incremental_review: true
+    # base_branches: [] (default) = only PRs into the default branch (main) are auto-reviewed.
+  # No path_filters: review every changed file (CodeRabbit built-in exclusions still apply).
+  # The previous allow-list also drove the sparse checkout, so pyproject.toml (ruff config)
+  # and .claude/** were never checked out.
   path_instructions:
-    - path: "**"
+    - path: "src/**/*.py"
       instructions: |
-        - CONTEXT: Python Kubernetes monitoring operator (Kopf-based) that uses LLMs to analyze cluster issues
-        - Architecture: Detection (scanners, K8s events, Flux watches) → Pipeline (dedup, context, LLM) → Alert (Slack)
-        - Be strict on: security (API keys, token handling, sanitization), correctness, error handling, async safety
-        - Be fair on: established patterns, Kubernetes API usage conventions
-        - Keep reviews concise and actionable - focus on high-impact issues only
-        - "Errors should never pass silently" - bare except clauses that swallow errors are a real bug pattern here
-        - Watch for: silent exception swallowing, race conditions in async scanner loops, unbounded context sizes
-    - path: "src/scanners/*.py"
+        Kopf operator: detection (scanners, K8s Warning events, Flux watches) -> src/engine/pipeline.py -> LLM -> Slack.
+        - Errors must never pass silently: an `except` that only does pass/continue/return-default without logging is a bug, unless it is a narrow parse error (ValueError, TypeError, json.JSONDecodeError) with a comment.
+        - K8s ApiException 404: on custom-resource discovery/list calls it means the CRD is not installed (debug log); on a named object (pod, event, owner) it means the object is gone - handle it as such, do not report a missing CRD. Any other status (403 included) = logger.warning.
+        - No blocking I/O in `async def` Kopf handlers; use loop.run_in_executor like src/handlers/startup.py.
+        - Timestamps are epoch floats from time.time(); any datetime must be timezone-aware UTC.
+        - A new Kubernetes API resource, API group or verb needs a matching ClusterRole change in safeops-course/sre (flux/infrastructure/observability/k8s-ai-monitor/clusterrole.yaml); the PR must say so.
+    - path: "src/scanners/**"
       instructions: |
-        - CONTEXT: Periodic scanners implementing the Scanner protocol (scan() -> list[ScanResult])
-        - Each scanner runs on its own async loop with configurable interval
-        - Check: proper K8s API error handling (404 = CRD not installed, not a bug), namespace filtering via EXCLUDE_NAMESPACES
-        - Check: ScanResult state_key uniqueness (used for dedup), correct severity levels
-        - Check: auto_resolve results are emitted for healthy state (clears previous alerts)
-        - Backup scanner has complex multi-source logic (CNPG, CronJob, Percona, S3) - verify each path independently
-        - Storage verification runs once daily - verify scheduling guard logic prevents missed or double runs
-    - path: "src/engine/*.py"
+        - Scanners are auto-discovered (pkgutil in src/scanners/__init__.py); a class counts if it satisfies the Scanner protocol in _base.py (name, enabled, interval_seconds, startup_delay, scan(), collect_daily_data()).
+        - `enabled` must come from a config.py env var; new scanners that probe the network or read secrets default to "false". reconcile.py is always on by design.
+        - state_key must be deterministic and unique. Do not change the format of an existing scanner's key (dedup and auto-resolve of open incidents depend on it); new scanners follow the pattern of the closest existing one (e.g. `Certificate:{ns}/{name}`). Healthy state must emit ScanResult(auto_resolve=True).
+        - Respect config.EXCLUDE_NAMESPACES / config.get_namespaces().
+        - backup.py covers CNPG, backup CronJobs, Percona and S3/GCS verification; the once-per-day storage check guard is backup.py _last_storage_check_date (storage_verify.py holds only the S3/GCS clients).
+        - HTTP probe bodies and log lines must go through sanitizer.redact_response_body before entering alert context.
+    - path: "src/engine/**"
       instructions: |
-        - CONTEXT: Core processing engine - LLM calls, pipeline orchestration, deduplication, Slack formatting
-        - pipeline.py is the shared entry point for all detection sources - changes here affect everything
-        - llm.py handles rate limiting, cost tracking, and response parsing - verify rate limit correctness
-        - notifier.py builds Slack Block Kit messages - verify block structure validity
-        - sanitizer.py redacts secrets - verify regex patterns catch real credential formats
-        - fingerprint.py generates SHA256 state keys - verify determinism and collision resistance
-        - escalation.py manages exponential backoff (2^count, capped 12h) - verify math correctness
-    - path: "src/engine/store/*.py"
+        - pipeline.py is shared by every detection source; check dedup (in-flight set, store cooldown, context hash) is not bypassed.
+        - Cooldown backoff lives in pipeline.py (`min(debounce * 2**min(count,10), 43200)`) and store/sqlite.py mark_seen; flag changes that make the two diverge. escalation.py only picks recurring/persistent levels.
+        - llm.py: every analyze_* entry point must sanitize_dict() the context, pass _check_rate_limit(), and truncate via context_budget.py to MAX_CONTEXT_BYTES_ALERT/REPORT before calling the provider.
+        - sanitizer.py: new patterns must not stop redacting existing credential formats covered by tests/test_sanitizer.py.
+        - notifier.py: Slack Block Kit limits (50 blocks, 3000 chars per section text); LLM output is untrusted text.
+        - store/sqlite.py: parameterised queries only; f-strings may build only `?` placeholder lists.
+    - path: "src/handlers/**"
       instructions: |
-        - CONTEXT: SQLite-backed state store for incidents, occurrences, LLM calls, reports, suppressions
-        - Critical for deduplication and escalation - data integrity matters
-        - Check: SQL injection safety (use parameterized queries only)
-        - Check: proper datetime handling (always UTC, timezone-aware)
-        - Check: transaction safety for multi-table operations
-    - path: "src/handlers/*.py"
+        - events.py filters on engine/constants.py IMPORTANT_EVENT_REASONS and _in_watched_namespace(); flux.py alerts on the Stalled condition.
+        - startup.py: write HTTP endpoints must call _check_auth (X-Internal-Token vs INTERNAL_TOKEN); note that an empty INTERNAL_TOKEN disables auth.
+    - path: "src/collectors/**"
       instructions: |
-        - CONTEXT: Kopf event handlers - startup, K8s Warning events, Flux stall detection
-        - startup.py initializes HTTP server, scanner loops, and daily scheduler
-        - events.py filters by IMPORTANT_EVENT_REASONS and namespace - verify filter correctness
-        - flux.py watches Kustomization/HelmRelease for Stalled condition
-        - Check: proper async patterns, no blocking calls in event handlers
-    - path: "src/collectors/*.py"
+        - Collectors gather context only; truncation happens later in engine/context_budget.py, so do not truncate silently here.
+        - Prometheus/Elasticsearch/Uptrace may be unconfigured or down: degrade to empty/"not_configured" with a log line, never crash the pipeline.
+        - Check PromQL correctness in prometheus.py, metrics_range.py and app_metrics.py.
+    - path: "src/diagnostics/**"
       instructions: |
-        - CONTEXT: Gather diagnostic context for LLM analysis - pod logs, events, metrics, owner chain
-        - Context is truncated to MAX_CONTEXT_BYTES before LLM call - verify truncation preserves useful data
-        - prometheus.py queries Prometheus API - verify PromQL correctness
-        - Check: proper error handling when Prometheus/Metrics API is unavailable
-    - path: "src/diagnostics/*.py"
-      instructions: |
-        - CONTEXT: Issue-specific diagnostic plugins (OOM, CrashLoop, ImagePull, scheduling, etc.)
-        - Each plugin matches an issue_type from PROBLEM_ALIASES
-        - Check: diagnostic data collection doesn't make excessive K8s API calls
-        - Check: plugins handle missing/partial data gracefully (pod may be gone by analysis time)
+        - A plugin's issue_type must equal a PROBLEM_ALIASES value and be registered in ALL_PLUGINS (_PLUGIN_MAP) in __init__.py.
+        - The pod may be gone by analysis time: handle 404 and partial data; keep K8s API calls per diagnosis small.
     - path: "src/config.py"
       instructions: |
-        - CONTEXT: All configuration via environment variables with sensible defaults
-        - Every new scanner/feature needs its enable flag and interval here
-        - Check: default values are safe for production (scanners enabled by default should be non-destructive)
-        - Check: type conversions have proper error handling (int(), float())
+        - Every env var is read at import; a bad int()/float() value fails the pod at start (intended, fail loudly). Flag silent fallbacks, not the missing try/except.
+        - New env vars must also be documented in CLAUDE.md and, if set in production, in the sre deployment.yaml.
     - path: "src/cli.py"
       instructions: |
-        - CONTEXT: Management CLI for kubectl exec into the container
-        - Read-only commands need no auth, write commands use INTERNAL_TOKEN
-        - Check: CLI output is human-readable with proper formatting
-        - Check: error cases produce helpful messages (DB not found, no incidents, etc.)
-    - path: "tests/*.py"
+        - Runs via kubectl exec and opens the SQLite store directly (SQLITE_PATH); no INTERNAL_TOKEN. ack/resolve/suppress write to the DB.
+        - `investigate --llm` sends cluster data to the LLM: it must go through llm.analyze_investigation (sanitised).
+        - Errors print a clear message and exit non-zero.
+    - path: "src/mcp_server.py"
       instructions: |
-        - CONTEXT: pytest tests for core logic (LLM parsing, sanitization, context budget, store)
-        - Tests should not require K8s cluster access or real LLM API keys
-        - Check: tests cover edge cases (empty input, malformed responses, unicode)
-        - Check: no flaky patterns (time-dependent, order-dependent)
+        - FastMCP stdio server used by Claude Code (.mcp.json). Tools are read-only and return {"status": "not_configured"} when a source is missing; flag any write to the cluster or store.
+    - path: "tests/**"
+      instructions: |
+        - unittest/pytest with unittest.mock; no real cluster, LLM key, S3/GCS or network. Use SqliteStore(":memory:").
+        - Cover edge cases (empty, malformed LLM JSON, unicode); no time- or order-dependent assertions.
     - path: "Dockerfile"
       instructions: |
-        - CONTEXT: Python 3.12-slim based image, runs kopf operator
-        - Check: no unnecessary packages, proper layer caching (requirements.txt before src/)
-        - Check: no secrets or credentials baked into the image
-        - Check: PYTHONPATH is set correctly for the src/ module layout
-    - path: "**/CLAUDE.md"
+        - python:3.12-slim, requirements.txt copied before src/, non-root uid 1000, PYTHONPATH=/app, ENTRYPOINT kopf run src/handlers/__init__.py. Keep these; no secrets or build-time credentials.
+    - path: "{requirements.txt,pyproject.toml}"
       instructions: |
-        - This file contains development guidelines and architecture documentation
-        - Learn from the content and apply the principles when reviewing other files
-        - Reference these guidelines in code review suggestions when applicable
-  path_filters:
-    - "**/*.py"
-    - "Dockerfile"
-    - "requirements.txt"
-    - "**/CLAUDE.md"
-    - "**/*.yml"
-    - "**/*.yaml"
-    - "!**/__pycache__/**"
-    - "!**/*.pyc"
-    - "!**/*.log"
-    - "!**/*.db"
+        - requirements.txt uses lower bounds only (>=); flag new dependencies without a clear need and major-version jumps of anthropic/openai/kopf/kubernetes.
+        - pyproject.toml holds the ruff and mypy config used by CLAUDE.md's Definition of Done; flag loosened rules without a comment.
+    - path: ".github/workflows/**"
+      instructions: |
+        - Image tags `main-v<semver>-<sha>-<unix_ts>` must keep matching the Flux ImagePolicy regex in safeops-course/sre (image-policy.yaml); changing the format silently stops deploys.
+        - Least-privilege permissions; prefer SHA-pinned actions.
+    - path: "CLAUDE.md"
+      instructions: |
+        - Must stay consistent with src/config.py defaults and the actual layout; flag drift.
   tools:
-    # Security tools
-    gitleaks:
-      enabled: true
-    semgrep:
-      enabled: true
-
-    # Python tools
+    # ruff reads pyproject.toml [tool.ruff] (py312, line-length 160, E/F/W).
     ruff:
       enabled: true
-
-    # Container tools
-    hadolint:
-      enabled: true
-    yamllint:
-      enabled: true
-
+    # Not run by CodeRabbit without .pylintrc / .flake8; disabled explicitly so ruff is the only Python linter.
+    pylint:
+      enabled: false
+    flake8:
+      enabled: false
+      # Everything else keeps its default (enabled): gitleaks, semgrep, osvScanner (requirements.txt),
+      # hadolint + trivy (Dockerfile), actionlint + zizmor (workflows), yamllint, markdownlint, presidio.
 knowledge_base:
   code_guidelines:
-    enabled: true
     filePatterns:
-      - "**/CLAUDE.md"
-  learnings:
-    scope: "local"
-  issues:
-    scope: "local"
-  pull_requests:
-    scope: "local"
-
+      - "CLAUDE.md"
+  linked_repositories:
+    - repository: "safeops-course/sre"
+      instructions: >-
+        Deploys this operator with Flux: flux/infrastructure/observability/k8s-ai-monitor/ (deployment.yaml env vars, clusterrole.yaml RBAC, image-policy.yaml tag regex, pvc.yaml for /data). Check that new env vars, K8s API resources and image tag formats in this repo are matched there.
 chat:
   auto_reply: false
-tone_instructions: "Be assertive on security, correctness, error handling, and async safety. Focus on real bugs over style. Watch for silent exception swallowing — it's the #1 bug pattern in this codebase. Keep feedback concise and actionable."
+inheritance: true
